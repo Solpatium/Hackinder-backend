@@ -84,7 +84,9 @@ class Db {
                 localization: cracow,
                 user: 'test',
                 swipes: {
-                    'kuba': 'left'
+                    'maks': 'right',
+                    'przemek': 'right',
+                    'kuba': 'right'
                 },
                 messages: []
             },
@@ -102,7 +104,7 @@ class Db {
                 description: loremIpsum,
                 image: 'https://picsum.photos/304',
                 localization: cracow,
-                user: 'maks',
+                user: 'test',
                 swipes: {},
                 messages: []
             }
@@ -132,7 +134,7 @@ class Db {
     }
 
     addMessage(ideaId, user, message) {
-        const message = {
+        const messageBody = {
             date: + new Date(),
             sender: user,
             content: message
@@ -141,7 +143,7 @@ class Db {
         return this.ideas.update({
             _id: new ObjectId(ideaId),
         }, {
-            $push: {'messages': message}
+            $push: {'messages': messageBody}
         });
     }
 
@@ -149,13 +151,16 @@ class Db {
         return this.ideas.find({
             _id: new ObjectId(ideaId)
         }).toArray()
-        .then(idea => {
-           return idea.messages;
+        .then(ideas => {
+           if( ideas.length > 0 ) {
+               return ideas[0].messages;
+           } else {
+               return [];
+           }
         });
     }
 
     addSwipe(ideaId, user, direction) {
-        const userSwipes = 'swipes.' + user;
         const updateKey = 'swipes.' + user;
         
         return this.ideas.update({

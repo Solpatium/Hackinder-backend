@@ -69,7 +69,6 @@ app.get('/login', function (req, res, next) {
       ])
     })
     .then(([user, userIdeas, matches]) => {
-      console.log(userIdeas)
       res.setHeader('Content-Type', 'application/json');
       res.send(JSON.stringify({
         user: user,
@@ -114,7 +113,6 @@ app.post('/swipe/:id/:val', function (req, res, next) {
       return db.addSwipe(id, u.login, direction);
     })
     .then((s) => {
-      console.log(s);
       res.setHeader('Content-Type', 'application/json');
       res.send(JSON.stringify({
         s
@@ -209,17 +207,17 @@ var http = require('http').Server(app);
 var io = require('socket.io')(http);
 io.on('connection', function (socket) {
   let userName = null;
-
+   console.log("CONNECTION-------")
   socket.on('login', function (msg) {
     console.log("RECEIVED IN CHAT " + msg)
     try {
       const user = JSON.parse(msg);
       db.validateUser(user.login, user.password)
         .then(u => {
-          userName = u.login;
+          userName = user.login;
           return Promise.all([
-            db.getUserIdeas(user),
-            db.getUserMatches(user),
+            db.getUserIdeas(user.login),
+            db.getUserMatches(user.login),
           ]);
         })
         .then(([ideas, matches]) => {
@@ -236,24 +234,39 @@ io.on('connection', function (socket) {
   });
 
   socket.on('getMessages', function (msg) {
+    console.log("POST" + msg)
+
     if (!userName) return;
 
     const { ideaId } = JSON.parse(msg);
+    socket.join(ideaId)
     db.getMessages(ideaId)
-      .then(messages => socket.emit('newMessages', messages))
+      .then(messages => {
+        console.log(messages)
+        messages.reverse();
+        socket.emit('newMessages', JSON.stringify({messages:messages}))}
+      )
       .catch(e => console.log(e));
   });
 
   socket.on('addMessage', function (msg) {
-    if (!userName) return;
+    if (!userName) return; 
+    console.log("USER " + userName)
+    console.log(msg)
 
     const { idea, content } = JSON.parse(msg);
-    io.to(idea).emit('newMessages', [content]);
     db.addMessage(idea, userName, content);
+   
+    const messageBody = {
+      date: + new Date(),
+      sender: userName,
+      content: content
+    }
+    io.to(idea).emit('newMessages', JSON.stringify({messages: [messageBody]}));
   });
 });
 
-http.listen(4000, function () {
+http.listen(4000, '0.0.0.0', function () {
   console.log('listening on *:4000');
 });
 
