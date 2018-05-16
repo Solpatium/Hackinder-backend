@@ -3,8 +3,10 @@ const $ne = MongoClient.$ne;
 const $exists = MongoClient.$exists;
 const $set = MongoClient.$set;
 const $or = MongoClient.$or;
-const ObjectId =require('mongodb').ObjectID;
+const ObjectId = require('mongodb').ObjectID;
 const assert = require('assert');
+const sha256 = require('js-sha256');
+
 
 console.log("TEST ");
 
@@ -33,21 +35,24 @@ class Db {
         this.users.insertMany([
             {
                 login: 'kuba',
-                password: 'ala',
+                hash: sha256('ala'),
                 localization: cracow,
                 fullname: 'Kuba Ptak',
+                token: 'a'
             },
             {
                 login: 'maks',
-                password: 'ala',
+                hash: sha256('ala'),
                 localization: cracow,
                 fullname: 'Maks Rojek',
+                token: 'a'
             },
             {
                 login: 'przemek',
-                password: 'ala',
+                hash: sha256('ala'),
                 localization: cracow,
-                fullname: 'Przemysław Moskała'
+                fullname: 'Przemysław Moskała',
+                token: 'a'
             },
         ], function(err, result) {
             assert.equal(err, null);
@@ -114,10 +119,33 @@ class Db {
         })
     }
 
-    validateUser(username, password) {
+    createToken(username, hash) {
+        console.log(username, hash)
+        const token = sha256('' + Math.random());
+
         return this.users.find({
             login: username,
-            password: password
+            hash: hash.toLowerCase()
+        }).toArray()
+        .then(r => {
+            console.log(r[0].hash)
+            if( r.length > 0 ) {
+                this.users.update({
+                    user: username
+                }, {
+                    $set: {token: token}
+                })
+            } else {
+                throw new Error('Invalid user credentials');
+            }
+        })
+        .then(_ => token);
+    }
+
+    validAccess(username, token) {
+        return this.users.find({
+            login: username,
+            token: token
         }).toArray();
     }
 

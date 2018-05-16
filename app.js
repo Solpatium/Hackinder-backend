@@ -16,30 +16,11 @@ var app = express();
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'jade');
 
-
-// app.use('/', function(err, req, res, next) {
-//   console.log('Time:', Date.now())
-//   next()
-//   console.log('dadasdasdas')
-//   next( createError(403));
-//   const login = req.query.login;
-//   const password = req.query.password;
-//   console.log('tesdasdsadsdsadst')
-//   db.validateUser(login, password)
-//     .then(r => {
-//       console.log(r);
-//       if(e.length > 0 ) {
-//         next();
-//       } else {
-//         res.status(403);
-//       }
-//     })
-// })
-
 function validRequest(req, res) {
-  const login = req.query.login;
-  const password = req.query.password;
-  return db.validateUser(login, password)
+  return new Promise(function (resolve, reject) {
+    const [login, token] = req.get('Authorization').split(':');
+    resolve(db.validAccess(login, token));
+  })
     .then(r => {
       if (r.length > 0) {
         return r[0];
@@ -50,7 +31,7 @@ function validRequest(req, res) {
     })
     .catch((r) => {
       console.log(r)
-    })
+    });
 }
 
 app.use(logger('dev'));
@@ -59,27 +40,21 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.get('/login', function (req, res, next) {
-  validRequest(req, res)
-    .then((u) => {
-      return Promise.all([
-        u,
-        db.getUserIdeas(u.login),
-        db.getUserMatches(u.login)
-      ])
-    })
-    .then(([user, userIdeas, matches]) => {
+app.get('/login/:user/:passwordHash', function (req, res, next) {
+  const username = req.params.user;
+  const passwordHash = req.params.passwordHash;
+
+  db.createToken(username, passwordHash)
+    .then(token => {
       res.setHeader('Content-Type', 'application/json');
       res.send(JSON.stringify({
-        user: user,
-        ideas: userIdeas,
-        matches: matches
+        token: token
       }));
     })
     .catch(e => {
       console.log(e);
       res.status(500);
-      res.send('Error')
+      res.send('Invalid credentials')
     })
 });
 
@@ -129,6 +104,27 @@ app.get('/ideas', function (req, res, next) {
       res.setHeader('Content-Type', 'application/json');
       res.send(JSON.stringify({
         ideas
+      }));
+    })
+    .catch(e => {
+      console.log(e);
+      res.status(500);
+      res.send('Error')
+    })
+});
+
+app.get('/matches', function (req, res, next) {
+  validRequest(req, res)
+    .then((u) => {
+      return Promise.all([
+        db.getUserIdeas(u.login),
+        db.getUserMatches(u.login),
+      ]);
+    })
+    .then( ([userIdeas, userMatches]) => {
+      res.setHeader('Content-Type', 'application/json');
+      res.send(JSON.stringify({
+        ideas: [...userIdeas, ...userMatches]
       }));
     })
     .catch(e => {
@@ -207,12 +203,12 @@ var http = require('http').Server(app);
 var io = require('socket.io')(http);
 io.on('connection', function (socket) {
   let userName = null;
-   console.log("CONNECTION-------")
+  console.log("CONNECTION-------")
   socket.on('login', function (msg) {
     console.log("RECEIVED IN CHAT " + msg)
     try {
       const user = JSON.parse(msg);
-      db.validateUser(user.login, user.password)
+      db.validAccess(user.login, user.token)
         .then(u => {
           userName = user.login;
           return Promise.all([
@@ -244,25 +240,26 @@ io.on('connection', function (socket) {
       .then(messages => {
         console.log(messages)
         messages.reverse();
-        socket.emit('newMessages', JSON.stringify({messages:messages}))}
+        socket.emit('newMessages', JSON.stringify({ messages: messages }))
+      }
       )
       .catch(e => console.log(e));
   });
 
   socket.on('addMessage', function (msg) {
-    if (!userName) return; 
+    if (!userName) return;
     console.log("USER " + userName)
     console.log(msg)
 
     const { idea, content } = JSON.parse(msg);
     db.addMessage(idea, userName, content);
-   
+
     const messageBody = {
       date: + new Date(),
       sender: userName,
       content: content
     }
-    io.to(idea).emit('newMessages', JSON.stringify({messages: [messageBody]}));
+    io.to(idea).emit('newMessages', JSON.stringify({ messages: [messageBody] }));
   });
 });
 
