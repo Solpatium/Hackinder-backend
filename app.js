@@ -230,7 +230,7 @@ io.on('connection', function (socket) {
   });
 
   socket.on('getMessages', function (msg) {
-    console.log("POST" + msg)
+    console.log("GET MESSAGES" + msg)
 
     if (!userName) return;
 

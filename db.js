@@ -131,7 +131,7 @@ class Db {
             console.log(r[0].hash)
             if( r.length > 0 ) {
                 this.users.update({
-                    user: username
+                    login: username
                 }, {
                     $set: {token: token}
                 })
